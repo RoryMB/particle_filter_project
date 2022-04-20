@@ -91,8 +91,10 @@ class ParticleFilter:
 
     def normalize_particles(self):
         # Make all the particle weights sum to 1.0
-        # TODO
-        pass
+        total = sum(map(lambda x:x.w, self.particle_cloud))
+
+        for particle in self.particle_cloud:
+            particle.w = particle.w / total
 
     def publish_particle_cloud(self):
         particle_cloud_pose_array = PoseArray()
