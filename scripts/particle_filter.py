@@ -85,7 +85,33 @@ class ParticleFilter:
         self.map = data
 
     def initialize_particle_cloud(self):
-        # TODO
+        self.particle_cloud = []
+
+        for i in range(self.num_particles):
+            x = np.random.uniform(0, 3)
+            y = np.random.uniform(-3, 0)
+            theta = np.random.uniform(0, 2*np.pi)
+
+            p = Pose()
+
+            p.position = Point()
+            p.position.x = x
+            p.position.y = y
+            p.position.z = 0
+
+            p.orientation = Quaternion()
+            q = quaternion_from_euler(0.0, 0.0, theta)
+            p.orientation.x = q[0]
+            p.orientation.y = q[1]
+            p.orientation.z = q[2]
+            p.orientation.w = q[3]
+
+            # initialize the new particle, where all will have the same weight (1.0)
+            particle = Particle(p, 1.0)
+
+            # append the particle to the particle cloud
+            self.particle_cloud.append(particle)
+
         self.normalize_particles()
         self.publish_particle_cloud()
 
@@ -146,6 +172,9 @@ class ParticleFilter:
             return
 
         if self.particle_cloud:
+            # TODO TESTING ONLY! REMOVE LATER!
+            self.publish_particle_cloud()
+
             # Check to see if we've moved far enough to perform an update
             curr_x = self.odom_pose.pose.position.x
             old_x = self.odom_pose_last_motion_update.pose.position.x
@@ -164,7 +193,7 @@ class ParticleFilter:
                 self.normalize_particles()
                 self.resample_particles()
                 self.update_estimated_robot_pose()
-                self.publish_particle_cloud()
+                #self.publish_particle_cloud()
                 self.publish_estimated_robot_pose()
                 self.odom_pose_last_motion_update = self.odom_pose
 
