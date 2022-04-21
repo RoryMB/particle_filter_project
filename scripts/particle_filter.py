@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import math
-from random import randint, random
+from random import randint, random, choices
 
 import numpy as np
 import rospy
@@ -139,8 +139,7 @@ class ParticleFilter:
         self.robot_estimate_pub.publish(robot_pose_estimate_stamped)
 
     def resample_particles(self):
-        # TODO
-        pass
+        self.particle_cloud = random.choices(self.particle_cloud, list(map(lambda x:x.w, self.particle_cloud)), k=self.num_particles)
 
     def robot_scan_received(self, data):
         # Wait until initialization is complete
