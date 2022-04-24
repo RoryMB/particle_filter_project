@@ -182,12 +182,16 @@ class ParticleFilter:
             curr_yaw = get_yaw_from_pose(self.odom_pose.pose)
             old_yaw = get_yaw_from_pose(self.odom_pose_last_motion_update.pose)
 
-            if (np.abs(curr_x - old_x) > self.lin_mvmt_threshold or
-                np.abs(curr_y - old_y) > self.lin_mvmt_threshold or
-                np.abs(curr_yaw - old_yaw) > self.ang_mvmt_threshold):
+            x_moved = np.abs(curr_x - old_x)
+            y_moved = np.abs(curr_y - old_y)
+            yaw_moved = np.abs(curr_yaw - old_yaw)
+
+            if (x_moved > self.lin_mvmt_threshold or
+                y_moved > self.lin_mvmt_threshold or
+                yaw_moved > self.ang_mvmt_threshold):
 
                 # This is where the main logic of the particle filter is carried out
-                self.update_particles_with_motion_model()
+                self.update_particles_with_motion_model(x_moved, y_moved, yaw_moved)
                 self.update_particle_weights_with_measurement_model(data)
                 self.normalize_particles()
                 self.resample_particles()
@@ -205,11 +209,23 @@ class ParticleFilter:
         # TODO
         pass
 
-    def update_particles_with_motion_model(self):
+    def update_particles_with_motion_model(self, x_moved, y_moved, yaw_moved):
         # Based on the how the robot has moved (calculated from its odometry), we'll move
         # all of the particles correspondingly
         # TODO
-        pass
+        for particle in self.particle_cloud:
+            yaw = get_yaw_from_pose(particle.pose)
+            yaw = yaw + yaw_moved
+
+            particle.pose.orientation
+            q = quaternion_from_euler(0.0, 0.0, yaw)
+            particle.pose.orientation.x = q[0]
+            particle.pose.orientation.y = q[1]
+            particle.pose.orientation.z = q[2]
+            particle.pose.orientation.w = q[3]
+            
+            particle.pose.position.x = particle.pose.position.x + (math.cos(yaw) * x_moved + math.cos(yaw) * y_moved)
+            particle.pose.position.y = particle.pose.position.y + (math.sin(yaw) * x_moved + math.sin(yaw) * y_moved)
 
 if __name__=="__main__":
     pf = ParticleFilter()
