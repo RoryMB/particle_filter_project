@@ -24,13 +24,6 @@ def get_yaw_from_pose(p):
             [2])
     return yaw
 
-def draw_random_sample():
-    """ Draws a random sample of n elements from a given list of choices and their specified probabilities.
-    We recommend that you fill in this function using random_sample.
-    """
-    # TODO
-    pass
-
 class Particle:
     def __init__(self, pose, w):
         # Particle pose (Pose object from geometry_msgs)
@@ -54,15 +47,24 @@ class ParticleFilter:
         # Inialize our map
         self.map = OccupancyGrid()
         # The number of particles used in the particle filter
-        self.num_particles = 10000
+        self.num_particles = 1000
         # Initialize the particle cloud array
         self.particle_cloud = []
         # Initialize the estimated robot pose
         self.robot_estimate = Pose()
         # Set threshold values for linear and angular movement before we preform an update
-        self.lin_mvmt_threshold = 0.2
-        self.ang_mvmt_threshold = (np.pi / 6)
+        self.lin_mvmt_threshold = 0.05
+        self.ang_mvmt_threshold = (np.pi / 24)
         self.odom_pose_last_motion_update = None
+
+        #### Custom parameters
+        # Range of initial particle distribution
+        self.x_range = [-.2, 3]
+        self.y_range = [-3, .2]
+        # Gaussian sigma for randomizing new particle poses
+        self.x_gauss = 0.1
+        self.y_gauss = 0.1
+        self.theta_gauss = 0.2
 
         # Setup publishers and subscribers
         # Publish the current particle cloud
@@ -88,8 +90,8 @@ class ParticleFilter:
         self.particle_cloud = []
 
         for i in range(self.num_particles):
-            x = np.random.uniform(-.2, 3)
-            y = np.random.uniform(-3, .2)
+            x = np.random.uniform(*self.x_range)
+            y = np.random.uniform(*self.y_range)
             theta = np.random.uniform(0, 2*np.pi)
 
             p = Pose()
@@ -139,23 +141,25 @@ class ParticleFilter:
         self.robot_estimate_pub.publish(robot_pose_estimate_stamped)
 
     def resample_particles(self):
+        # Sample from the particle cloud
         particles = choices(self.particle_cloud, list(map(lambda x:x.w, self.particle_cloud)), k=self.num_particles)
 
+        # Rebuild the particle cloud from the sampled particles
         self.particle_cloud = []
         for particle in particles:
-            # Unfortunately, this created a bunch of pointers rather than new
+            # Unfortunately, we created a bunch of pointers rather than new
             # particles, so we now have to create a bunch of new Particle()'s
 
             p = Pose()
 
             p.position = Point()
-            p.position.x = particle.pose.position.x + np.random.normal(0, 0.1, 1).item()
-            p.position.y = particle.pose.position.y + np.random.normal(0, 0.1, 1).item()
+            p.position.x = particle.pose.position.x + np.random.normal(0, self.x_gauss, 1).item()
+            p.position.y = particle.pose.position.y + np.random.normal(0, self.y_gauss, 1).item()
             p.position.z = 0
 
             p.orientation = Quaternion()
             theta = get_yaw_from_pose(particle.pose)
-            theta += np.random.normal(0, 0.2, 1).item()
+            theta += np.random.normal(0, self.theta_gauss, 1).item()
             q = quaternion_from_euler(0.0, 0.0, theta)
             p.orientation.x = q[0]
             p.orientation.y = q[1]
@@ -206,12 +210,19 @@ class ParticleFilter:
             curr_yaw = get_yaw_from_pose(self.odom_pose.pose)
             old_yaw = get_yaw_from_pose(self.odom_pose_last_motion_update.pose)
 
-            if (np.abs(curr_x - old_x) > self.lin_mvmt_threshold or
-                np.abs(curr_y - old_y) > self.lin_mvmt_threshold or
-                np.abs(curr_yaw - old_yaw) > self.ang_mvmt_threshold):
+            x_moved = curr_x - old_x
+            y_moved = curr_y - old_y
+            yaw_moved = curr_yaw - old_yaw
+
+            if (np.abs(x_moved) > self.lin_mvmt_threshold or
+                np.abs(y_moved) > self.lin_mvmt_threshold or
+                np.abs(yaw_moved) > self.ang_mvmt_threshold):
+
+                distance = (x_moved**2 + y_moved**2)**0.5
+                relative_direction = np.arctan2(y_moved, x_moved) - curr_yaw
 
                 # This is where the main logic of the particle filter is carried out
-                self.update_particles_with_motion_model()
+                self.update_particles_with_motion_model(distance, relative_direction, yaw_moved)
                 self.update_particle_weights_with_measurement_model(data)
                 self.normalize_particles()
                 self.resample_particles()
@@ -232,7 +243,6 @@ class ParticleFilter:
             y += particle.pose.position.y
 
             theta = get_yaw_from_pose(particle.pose)
-            # TODO figure out which way is angle 0
             theta_x += np.cos(theta)
             theta_y += np.sin(theta)
 
@@ -251,14 +261,84 @@ class ParticleFilter:
         self.robot_estimate.orientation.w = q[3]
 
     def update_particle_weights_with_measurement_model(self, data):
-        # TODO
-        pass
+        # Get the closest obstacles to the front, left, and right of the robot
+        front = data.ranges[0]
+        left  = data.ranges[90]
+        right = data.ranges[270]
 
-    def update_particles_with_motion_model(self):
+        # Are width and height in the right order?
+        # They are the same value so hard to tell
+        map = np.array(self.map.data).reshape((self.map.info.width, self.map.info.height))
+
+        for particle in self.particle_cloud:
+            theta = get_yaw_from_pose(particle.pose)
+            run = math.cos(theta)
+            rise = math.sin(theta)
+
+            x = particle.pose.position.x
+            y = particle.pose.position.y
+
+            particle_front = self.particle_distance(map, x, y, run, rise)
+            particle_left =  self.particle_distance(map, x, y, -1 * rise, run)
+            particle_right = self.particle_distance(map, x, y, rise, -1 * run)
+
+            particle.w = 1 / (abs(front - particle_front) + abs(left - particle_left) + abs(right - particle_right))
+
+    def interpolate(self, x, x1, x2, y1, y2):
+        # Interpolates like so:
+        #    x1    x    x2
+        #    y1   out   y2
+        return y1 + (x-x1)*(y2-y1)/(x2-x1)
+
+    def particle_distance(self, map, x, y, run, rise):
+        distance = 0
+        while True:
+            # Make sure map index is valid
+            if 0 > x > self.map.info.width:
+                break
+            if 0 > y > self.map.info.height:
+                break
+
+            # Get value in map
+            v = map[
+                int(self.interpolate(y, -3, 0, 140, 200)),
+                int(self.interpolate(x,  0, 3, 200, 260))
+            ]
+
+            # Check map value
+            if v == -1:
+                distance = 100
+            if v != 0:
+                break
+
+            # Break if something unexpected happens
+            if distance > 100:
+                break
+
+            # Move forward a little bit
+            x = x + (run*0.1)
+            y = y + (rise*0.1)
+
+            distance = distance + 0.1
+
+        return distance
+
+    def update_particles_with_motion_model(self, distance, relative_direction, yaw_moved):
         # Based on the how the robot has moved (calculated from its odometry), we'll move
         # all of the particles correspondingly
-        # TODO
-        pass
+        for particle in self.particle_cloud:
+            yaw = get_yaw_from_pose(particle.pose)
+
+            theta = relative_direction + yaw
+            particle.pose.position.x = particle.pose.position.x + distance * np.cos(theta)
+            particle.pose.position.y = particle.pose.position.y + distance * np.sin(theta)
+
+            yaw = yaw + yaw_moved
+            q = quaternion_from_euler(0.0, 0.0, yaw)
+            particle.pose.orientation.x = q[0]
+            particle.pose.orientation.y = q[1]
+            particle.pose.orientation.z = q[2]
+            particle.pose.orientation.w = q[3]
 
 if __name__=="__main__":
     pf = ParticleFilter()
