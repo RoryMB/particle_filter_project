@@ -222,8 +222,33 @@ class ParticleFilter:
 
     def update_estimated_robot_pose(self):
         # Based on the particles within the particle cloud, update the robot pose estimate
-        # TODO
-        pass
+        x = 0
+        y = 0
+        theta_x = 0
+        theta_y = 0
+
+        for particle in self.particle_cloud:
+            x += particle.pose.position.x
+            y += particle.pose.position.y
+
+            theta = get_yaw_from_pose(particle.pose)
+            # TODO figure out which way is angle 0
+            theta_x += np.cos(theta)
+            theta_y += np.sin(theta)
+
+        x /= len(self.particle_cloud)
+        y /= len(self.particle_cloud)
+        theta_x /= len(self.particle_cloud)
+        theta_y /= len(self.particle_cloud)
+        theta = np.arctan2(theta_y, theta_x)
+
+        self.robot_estimate.position.x = x
+        self.robot_estimate.position.y = y
+        q = quaternion_from_euler(0.0, 0.0, theta)
+        self.robot_estimate.orientation.x = q[0]
+        self.robot_estimate.orientation.y = q[1]
+        self.robot_estimate.orientation.z = q[2]
+        self.robot_estimate.orientation.w = q[3]
 
     def update_particle_weights_with_measurement_model(self, data):
         # TODO
