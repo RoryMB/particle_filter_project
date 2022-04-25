@@ -88,8 +88,8 @@ class ParticleFilter:
         self.particle_cloud = []
 
         for i in range(self.num_particles):
-            x = np.random.uniform(0, 3)
-            y = np.random.uniform(-3, 0)
+            x = np.random.uniform(-.2, 3)
+            y = np.random.uniform(-3, .2)
             theta = np.random.uniform(0, 2*np.pi)
 
             p = Pose()
@@ -120,7 +120,7 @@ class ParticleFilter:
         total = sum(map(lambda x:x.w, self.particle_cloud))
 
         for particle in self.particle_cloud:
-            particle.w = particle.w / total
+            particle.w = particle.w / total if total>0 else 1/len(self.particle_cloud)
 
     def publish_particle_cloud(self):
         particle_cloud_pose_array = PoseArray()
@@ -198,9 +198,6 @@ class ParticleFilter:
             return
 
         if self.particle_cloud:
-            # TODO TESTING ONLY! REMOVE LATER!
-            self.publish_particle_cloud()
-
             # Check to see if we've moved far enough to perform an update
             curr_x = self.odom_pose.pose.position.x
             old_x = self.odom_pose_last_motion_update.pose.position.x
@@ -219,7 +216,7 @@ class ParticleFilter:
                 self.normalize_particles()
                 self.resample_particles()
                 self.update_estimated_robot_pose()
-                #self.publish_particle_cloud()
+                self.publish_particle_cloud()
                 self.publish_estimated_robot_pose()
                 self.odom_pose_last_motion_update = self.odom_pose
 
