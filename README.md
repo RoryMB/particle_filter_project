@@ -81,6 +81,9 @@ Finish before Apr 26
 - Final polish
 
 ## Writeup
+
+https://user-images.githubusercontent.com/34782324/165139351-cbc851f3-d6aa-4a9c-8c49-6d783cd61e4f.mp4
+
 ### Objectives Description
 ### High-level Description
 ### Code Description
