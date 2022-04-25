@@ -139,7 +139,34 @@ class ParticleFilter:
         self.robot_estimate_pub.publish(robot_pose_estimate_stamped)
 
     def resample_particles(self):
-        self.particle_cloud = random.choices(self.particle_cloud, list(map(lambda x:x.w, self.particle_cloud)), k=self.num_particles)
+        particles = choices(self.particle_cloud, list(map(lambda x:x.w, self.particle_cloud)), k=self.num_particles)
+
+        self.particle_cloud = []
+        for particle in particles:
+            # Unfortunately, this created a bunch of pointers rather than new
+            # particles, so we now have to create a bunch of new Particle()'s
+
+            p = Pose()
+
+            p.position = Point()
+            p.position.x = particle.pose.position.x + np.random.normal(0, 0.1, 1).item()
+            p.position.y = particle.pose.position.y + np.random.normal(0, 0.1, 1).item()
+            p.position.z = 0
+
+            p.orientation = Quaternion()
+            theta = get_yaw_from_pose(particle.pose)
+            theta += np.random.normal(0, 0.2, 1).item()
+            q = quaternion_from_euler(0.0, 0.0, theta)
+            p.orientation.x = q[0]
+            p.orientation.y = q[1]
+            p.orientation.z = q[2]
+            p.orientation.w = q[3]
+
+            # initialize the new particle, where all will have the same weight (1.0)
+            new_particle = Particle(p, 1.0)
+
+            # append the particle to the particle cloud
+            self.particle_cloud.append(new_particle)
 
     def robot_scan_received(self, data):
         # Wait until initialization is complete
