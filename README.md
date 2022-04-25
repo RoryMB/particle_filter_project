@@ -85,7 +85,9 @@ Finish before Apr 26
 https://user-images.githubusercontent.com/34782324/165139351-cbc851f3-d6aa-4a9c-8c49-6d783cd61e4f.mp4
 
 ### Objectives Description
+The goal of this project was to implement particle filter localization. This meant given a map of an environment, our Python script is meant to estimate the position and orientation of a robot.
 ### High-level Description
+Our script uses Monte Carlo Localization. Firstly, a uniform random distribution of particles are initialized over a map of a maze. As the robot moves through the maze and publishes new LiDAR scan measurements, each particle's weight is computed by comparing the robot's front, left, and right LiDAR measurements to the particle's hypothetical sensor measurments. Higher weights indicate a closer similarity with the robot's LiDAR measurements. Then the weights of all the particles are normalized to a summation of one and the particles are resampled proportionally to their weights.
 ### Code Description
 #### Initialization of particle cloud
 #### Movement model
