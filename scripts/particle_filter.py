@@ -207,7 +207,31 @@ class ParticleFilter:
 
     def update_particle_weights_with_measurement_model(self, data):
         # TODO
-        pass
+        # Get the closest obstacles to the front, left, and right of the robot
+        front = data.ranges[0]
+        left = data.ranges[90]
+        right = data.ranges[270]
+        for particle in self.particle_cloud:
+            yaw = get_yaw_from_pose(particle.pose)
+            rise = math.sin(yaw)
+            run = math.cos(yaw)
+
+            x = particle.pose.position.x
+            y = particle.pose.position.y
+
+            particle_front = self.particle_distance(x, y, run, rise)
+            particle_left =  self.particle_distance(x, y, -1 * rise, run)
+            particle_right = self.particle_distance(x, y, rise, -1 * run)
+
+            particle.w = 1 / (abs(front - particle_front) + abs(left - particle_left) + abs(right - particle_right))
+    
+    def particle_distance(self, x, y, run, rise):
+        distance = 0
+        while self.map[y][x] < 0.7:
+            x = x + run
+            y = y + rise
+            distance = distance + 1
+        return distance
 
     def update_particles_with_motion_model(self, x_moved, y_moved, yaw_moved):
         # Based on the how the robot has moved (calculated from its odometry), we'll move
