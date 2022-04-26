@@ -118,8 +118,22 @@ This function recieves a 2d array of the occupancy grid, an x and y position, an
 ##### Code Location
 ##### Function/Code Description
 #### Optimization of Parameters
-##### Code Location
-##### Function/Code Description
+##### Number of Particles
+###### Code Location
+###### Function/Code Description
+##### Degrees of Laser Scanner Considered
+###### Code Location
+The optimization of degrees of laser scanner considered was done in `update_particle_weights_with_measurement_model` on line 263.
+###### Function/Code Description
+In this function we experimented by considering more angles but did not notice a difference in how fast our particles converged. For this reason, we used the relatively less computationally intensive solution of only consider the angles 0 degrees in front and 90 degrees to the left and right of the robot.
+##### Amount of Noise Added to Particles
+###### Code Location
+###### Function/Code Description
 ### Challenges
+One of the most difficult parts of the project was understanding how all the pieces of the script fit together. Something that helped with this challenge was focusing on what a function's input and output was and assuming it worked until work needed to be done on it. Additionally, using a small number of particles and using print statements made it easier to understand how the  parts of the script fit together.
 ### Future Work
+Given more time, we could have experimented more with introducing noice in our motion model. For example, we could try to sample it from a normal distribution. Additionally we could try to account for measurement noise, unexpected objects, failure to detect obstacles, and random measurements using the beam model for range finders algorithm specified in Class Meeting 06.
 ### Takeaways
+• Finding and reading documentation on new variable types is very helpful during implementation; however, there are also many videos on the internet that are helpful in explaining key concepts. For example, I was able to find videos that explained how occupancy grids worked.
+
+• It is very important to test code as it is being written. Even if a function is not finished, parts of it can still likely be tested. For example, some time was wasted writing `update_particle_weights_with_measurement_model` under the assumption that the occupancy grid was already a 2-D array, but running the script to try and access the array would have revealed that this was not the case earlier.
