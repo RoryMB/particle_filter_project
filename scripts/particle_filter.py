@@ -90,17 +90,20 @@ class ParticleFilter:
         self.particle_cloud = []
 
         for i in range(self.num_particles):
+            # Randomly set position and heading within the maze
             x = np.random.uniform(*self.x_range)
             y = np.random.uniform(*self.y_range)
             theta = np.random.uniform(0, 2*np.pi)
 
             p = Pose()
 
+            # Set the location parameters
             p.position = Point()
             p.position.x = x
             p.position.y = y
             p.position.z = 0
 
+            # Set the rotation quaternion based on the heading angle
             p.orientation = Quaternion()
             q = quaternion_from_euler(0.0, 0.0, theta)
             p.orientation.x = q[0]
@@ -118,9 +121,11 @@ class ParticleFilter:
         self.publish_particle_cloud()
 
     def normalize_particles(self):
-        # Make all the particle weights sum to 1.0
+        # Find the total weight of all particles
         total = sum(map(lambda x:x.w, self.particle_cloud))
 
+        # Normalize the weights, making all the particle weights sum to 1.0
+        # Assume equal weight if the total was 0 (helped handle unexpected bugs)
         for particle in self.particle_cloud:
             particle.w = particle.w / total if total>0 else 1/len(self.particle_cloud)
 
@@ -144,7 +149,7 @@ class ParticleFilter:
         # Sample from the particle cloud
         particles = choices(self.particle_cloud, list(map(lambda x:x.w, self.particle_cloud)), k=self.num_particles)
 
-        # Rebuild the particle cloud from the sampled particles
+        # Make a new particle cloud from the sampled particles
         self.particle_cloud = []
         for particle in particles:
             # Unfortunately, we created a bunch of pointers rather than new
@@ -152,13 +157,17 @@ class ParticleFilter:
 
             p = Pose()
 
+            # Set the location parameters
             p.position = Point()
+            # Add some Gaussian random noise to the new position
             p.position.x = particle.pose.position.x + np.random.normal(0, self.x_gauss, 1).item()
             p.position.y = particle.pose.position.y + np.random.normal(0, self.y_gauss, 1).item()
             p.position.z = 0
 
+            # Set the rotation quaternion based on the heading angle
             p.orientation = Quaternion()
             theta = get_yaw_from_pose(particle.pose)
+            # Add some Gaussian random noise to the new angle
             theta += np.random.normal(0, self.theta_gauss, 1).item()
             q = quaternion_from_euler(0.0, 0.0, theta)
             p.orientation.x = q[0]
@@ -210,6 +219,7 @@ class ParticleFilter:
             curr_yaw = get_yaw_from_pose(self.odom_pose.pose)
             old_yaw = get_yaw_from_pose(self.odom_pose_last_motion_update.pose)
 
+            # Find the movement deltas
             x_moved = curr_x - old_x
             y_moved = curr_y - old_y
             yaw_moved = curr_yaw - old_yaw
@@ -218,6 +228,7 @@ class ParticleFilter:
                 np.abs(y_moved) > self.lin_mvmt_threshold or
                 np.abs(yaw_moved) > self.ang_mvmt_threshold):
 
+                # Calculate the distance and angle of motion relative to current heading
                 distance = (x_moved**2 + y_moved**2)**0.5
                 relative_direction = np.arctan2(y_moved, x_moved) - curr_yaw
 
@@ -233,11 +244,13 @@ class ParticleFilter:
 
     def update_estimated_robot_pose(self):
         # Based on the particles within the particle cloud, update the robot pose estimate
+
         x = 0
         y = 0
         theta_x = 0
         theta_y = 0
 
+        # Iterate over all particle positions and headings
         for particle in self.particle_cloud:
             x += particle.pose.position.x
             y += particle.pose.position.y
@@ -246,12 +259,14 @@ class ParticleFilter:
             theta_x += np.cos(theta)
             theta_y += np.sin(theta)
 
+        # Finish finding the average position and heading
         x /= len(self.particle_cloud)
         y /= len(self.particle_cloud)
         theta_x /= len(self.particle_cloud)
         theta_y /= len(self.particle_cloud)
         theta = np.arctan2(theta_y, theta_x)
 
+        # Set the estimated position from the averages
         self.robot_estimate.position.x = x
         self.robot_estimate.position.y = y
         q = quaternion_from_euler(0.0, 0.0, theta)
@@ -267,10 +282,11 @@ class ParticleFilter:
         right = data.ranges[270]
 
         # Are width and height in the right order?
-        # They are the same value so hard to tell
+        # They are the same value here, so hard to tell
         map = np.array(self.map.data).reshape((self.map.info.width, self.map.info.height))
 
         for particle in self.particle_cloud:
+            # Find the heading of the particle
             theta = get_yaw_from_pose(particle.pose)
             run = math.cos(theta)
             rise = math.sin(theta)
@@ -278,10 +294,12 @@ class ParticleFilter:
             x = particle.pose.position.x
             y = particle.pose.position.y
 
+            # Raycast from each particle to the walls in front and beside it
             particle_front = self.particle_distance(map, x, y, run, rise)
             particle_left =  self.particle_distance(map, x, y, -1 * rise, run)
             particle_right = self.particle_distance(map, x, y, rise, -1 * run)
 
+            # Weight particles highly if they match the true lidar readings
             particle.w = 1 / (abs(front - particle_front) + abs(left - particle_left) + abs(right - particle_right))
 
     def interpolate(self, x, x1, x2, y1, y2):
@@ -292,6 +310,9 @@ class ParticleFilter:
 
     def particle_distance(self, map, x, y, run, rise):
         distance = 0
+
+        # Perform a raycast from <x, y>, stepping
+        # through the map in direction <run, rise>
         while True:
             # Make sure map index is valid
             if 0 > x > self.map.info.width:
@@ -329,10 +350,12 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             yaw = get_yaw_from_pose(particle.pose)
 
+            # Move the particles the right distance at the relative heading
             theta = relative_direction + yaw
             particle.pose.position.x = particle.pose.position.x + distance * np.cos(theta)
             particle.pose.position.y = particle.pose.position.y + distance * np.sin(theta)
 
+            # Update the change in the heading
             yaw = yaw + yaw_moved
             q = quaternion_from_euler(0.0, 0.0, yaw)
             particle.pose.orientation.x = q[0]
